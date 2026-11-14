@@ -1,0 +1,36 @@
+name: Inspect iOS Isaac binary
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inspect-game-binary.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: macos-14
+    steps:
+      - name: Download the user's release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p report
+          curl --fail --location --retry 3 \
+            'https://github.com/lamichhanebikalcha-hash/test/releases/download/v1.0/The.Binding.of.Isaac.Rebirth' \
+            -o 'The.Binding.of.Isaac.Rebirth'
+          shasum -a 256 'The.Binding.of.Isaac.Rebirth' | tee report/sha256.txt
+          file 'The.Binding.of.Isaac.Rebirth' | tee report/file.txt
+          xcrun dwarfdump --uuid 'The.Binding.of.Isaac.Rebirth' | tee report/uuid.txt
+          otool -hv 'The.Binding.of.Isaac.Rebirth' > report/mach-header.txt
+          otool -l 'The.Binding.of.Isaac.Rebirth' > report/load-commands.txt
+          strings -a 'The.Binding.of.Isaac.Rebirth' > report/strings.txt
+          grep -Ei 'Repentance|Isaac|version|J[0-9]{3,}|Unity|OpenGL|Metal' report/strings.txt | head -200 > report/interesting-strings.txt || true
+      - name: Upload inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: isaac-binary-inspection
+          path: report/
+          retention-days: 7
