@@ -19,7 +19,7 @@ jobs:
           set -euo pipefail
           mkdir -p report
           curl --fail --location --retry 3 \
-            'https://github.com/lamichhanebikalcha-hash/test/releases/download/v1.0/The.Binding.of.Isaac.Rebirth' \
+            'https://github.com/lamichhanebikalpa-hash/test/releases/download/v1.0/The.Binding.of.Isaac.Rebirth' \
             -o 'The.Binding.of.Isaac.Rebirth'
           shasum -a 256 'The.Binding.of.Isaac.Rebirth' | tee report/sha256.txt
           file 'The.Binding.of.Isaac.Rebirth' | tee report/file.txt
