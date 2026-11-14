@@ -1,0 +1,51 @@
+name: Inspect Isaac native layouts
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/inspect-isaac-native.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Download the exact iOS Isaac executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            'https://github.com/lamichhanebikalpa-hash/test/releases/download/v1.0/The.Binding.of.Isaac.Rebirth' \
+            -o The.Binding.of.Isaac.Rebirth
+          EXPECTED='6dbbbd59035f396f6d40b400c466f78c988802887c5031a0b7cb7f80b1890e17'
+          ACTUAL="$(shasum -a 256 The.Binding.of.Isaac.Rebirth | awk '{print $1}')"
+          test "$ACTUAL" = "$EXPECTED" || { echo "Unexpected binary SHA-256: $ACTUAL"; exit 1; }
+          mkdir -p report
+          file The.Binding.of.Isaac.Rebirth | tee report/file.txt
+          shasum -a 256 The.Binding.of.Isaac.Rebirth | tee report/sha256.txt
+          xcrun dwarfdump --uuid The.Binding.of.Isaac.Rebirth | tee report/uuid.txt
+          otool -hv The.Binding.of.Isaac.Rebirth > report/mach-header.txt
+          otool -l The.Binding.of.Isaac.Rebirth > report/load-commands.txt
+          nm -nm The.Binding.of.Isaac.Rebirth > report/symbols.txt 2>&1 || true
+          otool -Iv The.Binding.of.Isaac.Rebirth > report/indirect-symbols.txt 2>&1 || true
+          otool -ov The.Binding.of.Isaac.Rebirth > report/objc-metadata.txt 2>&1 || true
+          strings -a -t x The.Binding.of.Isaac.Rebirth > report/strings-with-offsets.txt
+          grep -Ei 'GridEntity_Rock|Entity_NPC|GridEntity|IsBoss|HitPoints|MaxHitPoints|boss|health|rock|Repentance|J754' \
+            report/strings-with-offsets.txt > report/interesting-strings.txt || true
+          # Full disassembly is retained so exact ARM64 method bodies can be
+          # examined against the UUID, rather than guessed from PC/Lua layouts.
+          xcrun llvm-objdump --macho --disassemble --no-show-raw-insn \
+            The.Binding.of.Isaac.Rebirth > report/disassembly.txt 2> report/disassembly-errors.txt || true
+          # Function-start metadata and the compact symbol/metadata indexes.
+          xcrun dyld_info -function_starts The.Binding.of.Isaac.Rebirth \
+            > report/function-starts.txt 2>&1 || true
+      - name: Upload native inspection report
+        uses: actions/upload-artifact@v5
+        with:
+          name: isaac-native-layout-inspection
+          path: report/
+          retention-days: 7
